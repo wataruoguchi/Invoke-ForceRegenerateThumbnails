@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+	<meta charset="UTF-8">
+	<title>Invokes forceRegenerateThumbnails</title>
+	<style>
+	.non-active {
+		pointer-events: none;
+		cursor: default;
+	}
+	</style>
+</head>
+<body>
+	<h3>Welcome to be lazy.</h3>
+	<p>Show the console panal. "Inspect Element" > "Console"</p>
+	<p>If you want to stop this, just reload this window.</p>
+	<p>Click a button only once and wait until seeing "Completed!" in Console.</p>
+	<button id="fire">Click</button>
+	<div id="result"></div>
+</body>
+<script src="https://code.jquery.com/jquery-2.1.4.min.js"></script>
+<script>
+	/**
+	 * Invoke forceRegenerateThumbnails automatically.
+	 * 1. Check the link address when you usually invoke it. WP Admin page > Media > Mousehover "Force Regenerate Thumbnails" > right click and copy the URL.
+	 *		ex.) http://hostname/wp-admin/tools.php?page=force-regenerate-thumbnails&goback=1&ids=99999&_wpnonce=1b3f7d3384
+	 * 2. replace _wpnonce in get() method by the one you see in the link address
+	 * 3. Make a JSON file and name it "imageIdList.json"
+	 * 		ex.) [{"post_id": 99998}, {"post_id": 99999} ....]
+	 * 4. Save this html file and the JSON file in root directory.
+	 * 5. Open this html page by a browser, then show a console window of the browser, finally click a button.
+	 * 6. Wait until it's done.
+	 */
+
+	jQuery(document).ready(function($) {
+		$("#fire").click(function() {
+			// The file is result of "SELECT post_id FROM png_relationship"
+			$.getJSON('./imageIdList.json?13', function(data) {
+				$("#fire").addClass('non-active');
+				console.log("getJSON success");
+
+				var index = 0, progress, waitCompletion, currentData = data[index], idResult = "#result", idPercent = "#regenthumbs-bar-percent", idSuccess = "#regenthumbs-debug-successcount", idFailure = "#regenthumbs-debug-failurecount";
+				invoke_force_regenerate_thumbnails(currentData.post_id);
+
+				//Wait until one task get completed.
+				var intervalFunc = setInterval(function(){
+					if($(idResult).length > 0 && currentData !== undefined) {
+						waitCompletion = setInterval(function() {
+							try {
+								progress = $(idPercent).text();
+								if(progress === "100%") {
+									if($(idFailure).text() !== "0") {
+										throw "Plugin execution error.";
+									}
+									clearInterval(waitCompletion);
+									$(idResult).empty();
+									index++;
+									currentData = data[index];
+									if (currentData !== undefined) {
+										invoke_force_regenerate_thumbnails(currentData.post_id);																				
+									}
+								}
+							} catch (err) {
+								console.log("Error during processing ID: "+currentData.post_id);
+								console.log(err.message);
+								clearInterval(waitCompletion);
+								clearInterval(intervalFunc);
+							}
+						}, 10000);
+					} else {
+						clearInterval(intervalFunc);
+						console.log("Completed!");
+						$(idResult).empty();
+					}
+				}, 10000);
+			})
+			.fail(function() {
+				console.log("getJSON error. Remove comments if you have in the JSON file");
+			});
+		});
+
+		function invoke_force_regenerate_thumbnails(_id) {
+			console.log("Processing: " + _id);
+			$.get(
+				"./wp-admin/tools.php",
+				{page : "force-regenerate-thumbnails", goback : "1", ids : _id, _wpnonce : "1b3f7d3384"}, function(data) {
+					$("#result").append("<div class='"+_id+"'>"+data+"</div>");
+				}
+			).fail(function(){
+				console.log("Data is undefined. ID: "+_id);
+				throw "Data error. ID: "+_id;
+			});
+		}
+	});
+</script>
+</html>
